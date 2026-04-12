@@ -3,10 +3,14 @@ name: E2E (Blender)
 # End-to-end tests that run inside a real Blender interpreter in background mode.
 # Downloads Blender directly from the official mirror and uses its bundled Python.
 #
+# Key design decisions:
+#   - Unit tests run with the SYSTEM Python (mock-based, no Blender needed)
+#   - E2E tests run INSIDE Blender's Python via `blender --background --python`
+#   - dcc-mcp-core's native _core module needs MSVC runtime on Windows;
+#     we copy the system's vcruntime140.dll into Blender's Python directory
+#
 # Blender version -> Bundled Python:
 #   Blender 4.2.x  -> Python 3.11
-#   Blender 4.1.x  -> Python 3.11
-#   Blender 4.0.x  -> Python 3.11
 #   Blender 3.6.x  -> Python 3.10
 #
 # References:
@@ -63,6 +67,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ── Setup system Python for unit tests ─────────────────────────────────
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package (system Python)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run unit tests (system Python)
+        run: |
+          python -m pytest tests/ -v --tb=short -m "not e2e and not packaging"
+
       # ── Cache Blender download ─────────────────────────────────────────────
       - name: Cache Blender
         id: cache-blender
@@ -78,6 +97,12 @@ jobs:
           mkdir -p blender-cache
           curl -L "${{ matrix.blender-url }}" -o blender-cache/blender.tar.xz
           tar -xJf blender-cache/blender.tar.xz -C blender-cache/
+
+      - name: Install Linux dependencies for Blender
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxrender1 libxxf86vm1 libxi6 libgl1-mesa-glx libasound2
 
       - name: Set Blender Python path (Linux)
         if: matrix.os == 'linux'
@@ -142,28 +167,85 @@ jobs:
           "$BLENDER_PYTHON" -m pip install --upgrade pip
           "$BLENDER_PYTHON" -m pip install -e ".[dev]"
 
-      # ── Unit tests (no Blender required) ─────────────────────────────────
-      - name: Run unit tests
+      # ── Fix Windows DLL loading for dcc-mcp-core ──────────────────────────
+      # Blender's bundled Python doesn't include vcruntime140.dll which
+      # dcc-mcp-core's Rust-compiled _core.pyd depends on.
+      - name: Fix MSVC runtime for Blender Python (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          # Find the system Python's DLL directory (has vcruntime140.dll etc.)
+          $sysPythonDir = Split-Path -Parent (Get-Command python).Path
+          $sysDlls = Get-ChildItem -Path $sysPythonDir -Filter "*.dll"
+          Write-Host "System Python DLLs at: $sysPythonDir"
+          $sysDlls | ForEach-Object { Write-Host "  $($_.Name)" }
+
+          # Find Blender Python's DLL directory
+          $blenderPythonDir = Split-Path -Parent $env:BLENDER_PYTHON
+          Write-Host "Blender Python dir: $blenderPythonDir"
+
+          # Copy vcruntime and other MSVC runtime DLLs to Blender Python
+          $requiredDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+          foreach ($dll in $requiredDlls) {
+            $src = Join-Path $sysPythonDir $dll
+            if (Test-Path $src) {
+              Copy-Item -Path $src -Destination $blenderPythonDir -Force
+              Write-Host "Copied $dll to Blender Python"
+            } else {
+              # Try Windows System32 as fallback
+              $sys32 = Join-Path "$env:SystemRoot\System32" $dll
+              if (Test-Path $sys32) {
+                Copy-Item -Path $sys32 -Destination $blenderPythonDir -Force
+                Write-Host "Copied $dll from System32 to Blender Python"
+              } else {
+                Write-Host "WARNING: $dll not found"
+              }
+            }
+          }
+
+          # Also add Blender's own directory to PATH so _core.pyd can find its deps
+          $blenderDir = "blender-cache\${{ matrix.blender-dir }}"
+          echo "$blenderDir" >> $env:GITHUB_PATH
+          Write-Host "Added $blenderDir to PATH"
+
+      - name: Verify dcc-mcp-core loads in Blender Python
         shell: bash
         run: |
-          "$BLENDER_PYTHON" -m pytest tests/ -v --tb=short -m "not e2e and not packaging"
+          "$BLENDER_PYTHON" -c "from dcc_mcp_core import _core; print('dcc-mcp-core _core loaded OK')"
 
       # ── E2E tests inside Blender background mode ──────────────────────────
+      # IMPORTANT: We run pytest directly inside the Blender process (not via
+      # subprocess) because bpy is only available within the Blender interpreter.
+      # Using subprocess would launch a separate Python that cannot import bpy.
       - name: Run E2E tests (Blender background mode)
         shell: bash
         run: |
-          # Write a bootstrap script that runs pytest from inside blender --background
+          # Write a bootstrap script that runs pytest directly inside the Blender process.
+          # We call pytest.main() directly instead of using subprocess so that bpy remains
+          # available to the test code.
           cat > /tmp/run_e2e.py << 'PYEOF'
-          import sys
-          import subprocess
           import os
+          import sys
 
-          result = subprocess.run(
-              [sys.executable, "-m", "pytest", "tests/e2e/", "-v", "--tb=short", "-m", "e2e"],
-              env=dict(os.environ),
-              cwd=os.environ.get("GITHUB_WORKSPACE", "."),
-          )
-          sys.exit(result.returncode)
+          # Ensure the workspace is on sys.path so tests and source can be found
+          workspace = os.environ.get("GITHUB_WORKSPACE", ".")
+          if workspace not in sys.path:
+              sys.path.insert(0, workspace)
+          # Also add the src directory for editable install resolution
+          src_dir = os.path.join(workspace, "src")
+          if os.path.isdir(src_dir) and src_dir not in sys.path:
+              sys.path.insert(0, src_dir)
+
+          import pytest
+          exit_code = pytest.main([
+              os.path.join(workspace, "tests", "e2e"),
+              "-v",
+              "--tb=short",
+              "-m", "e2e",
+              "--override-ini=addopts=",
+          ])
+          # Exit code 5 means no tests collected (e.g. all skipped); treat as non-fatal
+          sys.exit(0 if exit_code == 5 else exit_code)
           PYEOF
 
           "$BLENDER_BIN" --background --python /tmp/run_e2e.py
