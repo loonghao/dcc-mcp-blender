@@ -44,7 +44,6 @@ def create_object(
     """
     try:
         import bpy
-        import mathutils
 
         object_type = object_type.lower()
         if object_type not in PRIMITIVE_TYPES:

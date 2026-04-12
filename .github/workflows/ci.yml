@@ -61,12 +61,8 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install package (no bpy — unit tests only)
-        run: pip install -e ".[dev]" --no-deps || pip install pytest pytest-cov pytest-mock pyyaml
-
-      - name: Install dcc-mcp-core only
-        run: pip install "dcc-mcp-core>=0.12.18,<1.0.0"
-        continue-on-error: true
+      - name: Install package with dev dependencies
+        run: pip install -e ".[dev]"
 
       - name: Run unit tests
         run: pytest tests/ -v --tb=short -m "not e2e and not packaging"
