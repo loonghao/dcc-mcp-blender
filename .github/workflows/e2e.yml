@@ -102,7 +102,7 @@ jobs:
         if: matrix.os == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxrender1 libxxf86vm1 libxi6 libgl1-mesa-glx libasound2
+          sudo apt-get install -y libxrender1 libxxf86vm1 libxi6 libgl1 libasound2t64
 
       - name: Set Blender Python path (Linux)
         if: matrix.os == 'linux'
@@ -168,8 +168,12 @@ jobs:
           "$BLENDER_PYTHON" -m pip install -e ".[dev]"
 
       # ── Fix Windows DLL loading for dcc-mcp-core ──────────────────────────
-      # Blender's bundled Python doesn't include vcruntime140.dll which
-      # dcc-mcp-core's Rust-compiled _core.pyd depends on.
+      # dcc-mcp-core's _core.pyd (Rust/PyO3) depends on VCRUNTIME140.dll and
+      # the UCRT api-ms-win-crt-* DLLs.  Blender's bundled Python ships its own
+      # vcruntime140.dll in python/bin/ but the version may differ from what
+      # _core.pyd was linked against.  We overwrite it with the system Python's
+      # copy and also add Blender's python/bin/ to PATH so that Windows can
+      # locate python3.dll (needed by the stable-abi wheel) at import time.
       - name: Fix MSVC runtime for Blender Python (Windows)
         if: matrix.os == 'windows'
         shell: pwsh
@@ -180,12 +184,18 @@ jobs:
           Write-Host "System Python DLLs at: $sysPythonDir"
           $sysDlls | ForEach-Object { Write-Host "  $($_.Name)" }
 
-          # Find Blender Python's DLL directory
+          # Find Blender Python's DLL directory (where python.exe lives)
           $blenderPythonDir = Split-Path -Parent $env:BLENDER_PYTHON
           Write-Host "Blender Python dir: $blenderPythonDir"
 
-          # Copy vcruntime and other MSVC runtime DLLs to Blender Python
-          $requiredDlls = @("vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll")
+          # Copy vcruntime, UCRT and other MSVC runtime DLLs to Blender Python
+          # Also copy python3.dll so the stable-abi _core.pyd can find it
+          $requiredDlls = @(
+            "vcruntime140.dll",
+            "vcruntime140_1.dll",
+            "msvcp140.dll",
+            "python3.dll"
+          )
           foreach ($dll in $requiredDlls) {
             $src = Join-Path $sysPythonDir $dll
             if (Test-Path $src) {
@@ -203,7 +213,12 @@ jobs:
             }
           }
 
-          # Also add Blender's own directory to PATH so _core.pyd can find its deps
+          # Add Blender's python/bin/ to PATH so _core.pyd can locate python3.dll
+          # and other DLLs at load time
+          echo "$blenderPythonDir" >> $env:GITHUB_PATH
+          Write-Host "Added $blenderPythonDir to PATH"
+
+          # Also add Blender's own directory for any Blender-shipped DLLs
           $blenderDir = "blender-cache\${{ matrix.blender-dir }}"
           echo "$blenderDir" >> $env:GITHUB_PATH
           Write-Host "Added $blenderDir to PATH"
@@ -211,6 +226,11 @@ jobs:
       - name: Verify dcc-mcp-core loads in Blender Python
         shell: bash
         run: |
+          # On Windows, ensure Blender Python's bin/ is on PATH for DLL resolution
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            BLENDER_BIN_DIR=$(dirname "$BLENDER_PYTHON")
+            export PATH="$BLENDER_BIN_DIR:$PATH"
+          fi
           "$BLENDER_PYTHON" -c "from dcc_mcp_core import _core; print('dcc-mcp-core _core loaded OK')"
 
       # ── E2E tests inside Blender background mode ──────────────────────────
