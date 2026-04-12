@@ -279,8 +279,11 @@ jobs:
       - name: Test MCP connectivity
         shell: bash
         run: |
-          # Write a Python script that starts the MCP server then sleeps
+          # Write a Python script that starts the MCP server and keeps it alive.
+          # The server stays running until a sentinel file is created by the
+          # test runner after all mcporter commands finish.
           cat > /tmp/start_mcp_server.py << 'PYEOF'
+          import os
           import sys
           import time
 
@@ -294,10 +297,15 @@ jobs:
           import dcc_mcp_blender
 
           server = dcc_mcp_blender.start_server(port=8765)
-          print(f"MCP server started. Waiting for mcporter tests...")
-          # Keep alive for 90 seconds
-          time.sleep(90)
+          print("MCP server started. Waiting for mcporter tests...", flush=True)
+
+          # Keep alive until the sentinel file is created by the test runner
+          sentinel = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "mcp_test_done")
+          while not os.path.exists(sentinel):
+              time.sleep(1)
+
           dcc_mcp_blender.stop_server()
+          print("MCP server stopped.", flush=True)
           PYEOF
 
           # Start server in background
@@ -308,7 +316,7 @@ jobs:
           # Wait for the server to be ready
           sleep 15
 
-          # Verify with Python urllib
+          # Verify with Python urllib (simple POST to /mcp endpoint)
           "$BLENDER_PYTHON" -c "
           import urllib.request, json, time, sys
           url = 'http://127.0.0.1:8765/mcp'
@@ -317,7 +325,7 @@ jobs:
               'params': {'protocolVersion': '2025-03-26', 'capabilities': {},
                          'clientInfo': {'name': 'ci', 'version': '1'}}
           }).encode()
-          for attempt in range(8):
+          for attempt in range(10):
               try:
                   req = urllib.request.Request(url, data=body,
                       headers={'Content-Type': 'application/json'}, method='POST')
@@ -328,7 +336,7 @@ jobs:
                       sys.exit(0)
               except Exception as e:
                   print(f'Attempt {attempt+1} failed: {e}')
-                  time.sleep(5)
+                  time.sleep(3)
           sys.exit(1)
           "
 
@@ -358,5 +366,9 @@ jobs:
             blender-ci.blender_scripting__execute_python \
             "code:import bpy; bpy.ops.mesh.primitive_sphere_add(); result = bpy.context.active_object.name"
 
+          # Signal the server to stop by creating the sentinel file
+          touch "$RUNNER_TEMP/mcp_test_done"
+          # Give Blender a moment to shut down gracefully
+          sleep 3
           kill $SERVER_PID 2>/dev/null || true
           echo "MCP connectivity tests: PASSED"
