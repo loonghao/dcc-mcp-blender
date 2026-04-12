@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from tests.conftest import load_and_call, make_mock_bpy
 
 
@@ -190,9 +188,7 @@ class TestDeleteMaterial:
         mat = _make_material("ToDelete")
         bpy.data.materials.get.return_value = mat
 
-        result = load_and_call(
-            "blender-materials/scripts/delete_material.py", bpy, name="ToDelete"
-        )
+        result = load_and_call("blender-materials/scripts/delete_material.py", bpy, name="ToDelete")
         assert result["success"] is True
         bpy.data.materials.remove.assert_called_once_with(mat)
 

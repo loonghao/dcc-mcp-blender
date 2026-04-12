@@ -19,7 +19,9 @@ def get_blender_info() -> dict:
         info = {
             "blender_version": ".".join(str(v) for v in bpy.app.version),
             "blender_version_string": bpy.app.version_string,
-            "blender_build_date": bpy.app.build_date.decode() if isinstance(bpy.app.build_date, bytes) else str(bpy.app.build_date),
+            "blender_build_date": bpy.app.build_date.decode()
+            if isinstance(bpy.app.build_date, bytes)
+            else str(bpy.app.build_date),
             "python_version": sys.version,
             "python_executable": sys.executable,
             "platform": sys.platform,

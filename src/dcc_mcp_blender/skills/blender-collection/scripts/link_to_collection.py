@@ -24,9 +24,7 @@ def link_to_collection(object_name: str, collection_name: str) -> dict:
 
         col = bpy.data.collections.get(collection_name)
         if col is None:
-            return skill_error(
-                f"Collection not found: {collection_name}", f"No collection named '{collection_name}'."
-            )
+            return skill_error(f"Collection not found: {collection_name}", f"No collection named '{collection_name}'.")
 
         if obj.name not in col.objects:
             col.objects.link(obj)

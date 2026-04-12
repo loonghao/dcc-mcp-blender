@@ -12,14 +12,13 @@ from __future__ import annotations
 import logging
 import os
 import pathlib
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from dcc_mcp_core import (
     ActionRegistry,
     McpHttpConfig,
     McpHttpServer,
     scan_and_load,
-    scan_skill_paths,
 )
 
 from dcc_mcp_blender.__version__ import __version__

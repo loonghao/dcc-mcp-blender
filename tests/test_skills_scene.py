@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from tests.conftest import load_and_call, make_mock_bpy
 
@@ -92,9 +88,7 @@ class TestNewScene:
 class TestSaveScene:
     def test_save_to_explicit_path(self):
         bpy = make_mock_bpy()
-        result = load_and_call(
-            "blender-scene/scripts/save_scene.py", bpy, filepath="/tmp/test.blend"
-        )
+        result = load_and_call("blender-scene/scripts/save_scene.py", bpy, filepath="/tmp/test.blend")
         assert result["success"] is True
         bpy.ops.wm.save_as_mainfile.assert_called_once_with(filepath="/tmp/test.blend")
 
@@ -115,9 +109,7 @@ class TestSaveScene:
 class TestOpenScene:
     def test_opens_blend_file(self):
         bpy = make_mock_bpy()
-        result = load_and_call(
-            "blender-scene/scripts/open_scene.py", bpy, filepath="/path/to/scene.blend"
-        )
+        result = load_and_call("blender-scene/scripts/open_scene.py", bpy, filepath="/path/to/scene.blend")
         assert result["success"] is True
         bpy.ops.wm.open_mainfile.assert_called_once_with(filepath="/path/to/scene.blend")
 

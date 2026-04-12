@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from tests.conftest import load_and_call, make_mock_bpy
 
 
@@ -39,9 +37,7 @@ class TestGetRenderInfo:
 class TestSetRenderSettings:
     def test_set_engine(self):
         bpy = make_mock_bpy()
-        result = load_and_call(
-            "blender-render/scripts/set_render_settings.py", bpy, engine="CYCLES"
-        )
+        result = load_and_call("blender-render/scripts/set_render_settings.py", bpy, engine="CYCLES")
         assert result["success"] is True
         assert bpy.context.scene.render.engine == "CYCLES"
 
@@ -59,16 +55,12 @@ class TestSetRenderSettings:
 
     def test_invalid_engine_returns_error(self):
         bpy = make_mock_bpy()
-        result = load_and_call(
-            "blender-render/scripts/set_render_settings.py", bpy, engine="INVALID_ENGINE"
-        )
+        result = load_and_call("blender-render/scripts/set_render_settings.py", bpy, engine="INVALID_ENGINE")
         assert result["success"] is False
 
     def test_set_output_path(self):
         bpy = make_mock_bpy()
-        result = load_and_call(
-            "blender-render/scripts/set_render_settings.py", bpy, output_path="/tmp/render/"
-        )
+        result = load_and_call("blender-render/scripts/set_render_settings.py", bpy, output_path="/tmp/render/")
         assert result["success"] is True
         assert bpy.context.scene.render.filepath == "/tmp/render/"
 
@@ -76,9 +68,7 @@ class TestSetRenderSettings:
         bpy = make_mock_bpy()
         bpy.context.scene.render.engine = "CYCLES"
         bpy.context.scene.cycles = MagicMock()
-        result = load_and_call(
-            "blender-render/scripts/set_render_settings.py", bpy, samples=256
-        )
+        result = load_and_call("blender-render/scripts/set_render_settings.py", bpy, samples=256)
         assert result["success"] is True
         assert bpy.context.scene.cycles.samples == 256
 
@@ -96,8 +86,6 @@ class TestRenderScene:
         bpy = make_mock_bpy()
         bpy.context.scene.render.filepath = ""
 
-        result = load_and_call(
-            "blender-render/scripts/render_scene.py", bpy, output_path="/custom/output.png"
-        )
+        result = load_and_call("blender-render/scripts/render_scene.py", bpy, output_path="/custom/output.png")
         assert result["success"] is True
         assert bpy.context.scene.render.filepath == "/custom/output.png"

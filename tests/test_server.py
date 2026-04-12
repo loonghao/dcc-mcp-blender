@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import tempfile
-from unittest.mock import MagicMock, patch
-
-import pytest
-
+from unittest.mock import patch
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -62,7 +59,7 @@ class TestSkillPathCollection:
     """_collect_skill_paths respects all path sources."""
 
     def test_builtin_always_included(self):
-        from dcc_mcp_blender.server import BlenderMcpServer, _BUILTIN_SKILLS_DIR
+        from dcc_mcp_blender.server import _BUILTIN_SKILLS_DIR, BlenderMcpServer
 
         server = BlenderMcpServer()
         paths = server._collect_skill_paths()
@@ -77,7 +74,7 @@ class TestSkillPathCollection:
             assert paths[0] == tmp
 
     def test_env_var_blender_skill_paths(self):
-        from dcc_mcp_blender.server import BlenderMcpServer, _ENV_EXTRA_SKILL_PATHS
+        from dcc_mcp_blender.server import _ENV_EXTRA_SKILL_PATHS, BlenderMcpServer
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {_ENV_EXTRA_SKILL_PATHS: tmp}):
@@ -86,7 +83,7 @@ class TestSkillPathCollection:
                 assert tmp in paths
 
     def test_env_var_generic_skill_paths(self):
-        from dcc_mcp_blender.server import BlenderMcpServer, _ENV_GENERIC_SKILL_PATHS
+        from dcc_mcp_blender.server import _ENV_GENERIC_SKILL_PATHS, BlenderMcpServer
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict("os.environ", {_ENV_GENERIC_SKILL_PATHS: tmp}):
@@ -96,9 +93,9 @@ class TestSkillPathCollection:
 
     def test_blender_env_before_generic_env(self):
         from dcc_mcp_blender.server import (
-            BlenderMcpServer,
             _ENV_EXTRA_SKILL_PATHS,
             _ENV_GENERIC_SKILL_PATHS,
+            BlenderMcpServer,
         )
 
         with (
@@ -126,7 +123,7 @@ class TestSkillPathCollection:
         assert "/nonexistent/path/xyz" not in paths
 
     def test_no_duplicates(self):
-        from dcc_mcp_blender.server import BlenderMcpServer, _BUILTIN_SKILLS_DIR
+        from dcc_mcp_blender.server import _BUILTIN_SKILLS_DIR, BlenderMcpServer
 
         builtin = str(_BUILTIN_SKILLS_DIR)
         server = BlenderMcpServer(extra_skill_paths=[builtin])

@@ -40,9 +40,7 @@ def get_object_info(name: str) -> dict:
             info["vertex_count"] = len(obj.data.vertices)
             info["edge_count"] = len(obj.data.edges)
             info["face_count"] = len(obj.data.polygons)
-            info["material_slots"] = [
-                slot.material.name if slot.material else None for slot in obj.material_slots
-            ]
+            info["material_slots"] = [slot.material.name if slot.material else None for slot in obj.material_slots]
 
         return skill_success(
             f"Object info: {name}",
