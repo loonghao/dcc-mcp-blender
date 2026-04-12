@@ -11,7 +11,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 from unittest.mock import MagicMock, patch
 
 SKILLS_ROOT = Path(__file__).parent.parent / "src" / "dcc_mcp_blender" / "skills"
@@ -108,15 +108,15 @@ def make_mock_bpy(
     mock_bpy.data.cameras = MagicMock()
     if data_attrs:
         for k, v in data_attrs.items():
-            getattr(mock_bpy.data, k)
+            attr = getattr(mock_bpy.data, k)
             if isinstance(v, list):
                 # Replace the MagicMock with a list-like mock that has get/new/remove
                 list_mock = MagicMock()
                 list_mock.__iter__ = MagicMock(return_value=iter(v))
                 list_mock.__len__ = MagicMock(return_value=len(v))
-                list_mock.__contains__ = MagicMock(
-                    side_effect=lambda x, _v=v: any(getattr(o, "name", None) == x or o == x for o in _v)
-                )
+                list_mock.__contains__ = MagicMock(side_effect=lambda x, _v=v: any(
+                    getattr(o, 'name', None) == x or o == x for o in _v
+                ))
                 setattr(mock_bpy.data, k, list_mock)
             else:
                 setattr(mock_bpy.data, k, v)

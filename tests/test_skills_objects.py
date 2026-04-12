@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
+
+import pytest
 
 from tests.conftest import load_and_call, make_mock_bpy
 
@@ -48,12 +50,16 @@ class TestCreateObject:
         obj = _make_obj("MyCube")
         bpy.context.active_object = obj
 
-        result = load_and_call("blender-objects/scripts/create_object.py", bpy, object_type="cube", name="MyCube")
+        result = load_and_call(
+            "blender-objects/scripts/create_object.py", bpy, object_type="cube", name="MyCube"
+        )
         assert result["success"] is True
 
     def test_invalid_type_returns_error(self):
         bpy = make_mock_bpy()
-        result = load_and_call("blender-objects/scripts/create_object.py", bpy, object_type="invalid_type")
+        result = load_and_call(
+            "blender-objects/scripts/create_object.py", bpy, object_type="invalid_type"
+        )
         assert result["success"] is False
         assert "invalid_type" in result["message"].lower()
 
@@ -99,7 +105,9 @@ class TestMoveObject:
         obj = _make_obj("Cube")
         bpy.data.objects.get.return_value = obj
 
-        result = load_and_call("blender-objects/scripts/move_object.py", bpy, name="Cube", location=[1.0, 2.0, 3.0])
+        result = load_and_call(
+            "blender-objects/scripts/move_object.py", bpy, name="Cube", location=[1.0, 2.0, 3.0]
+        )
         assert result["success"] is True
         assert obj.location == [1.0, 2.0, 3.0]
 
@@ -107,7 +115,9 @@ class TestMoveObject:
         bpy = make_mock_bpy()
         bpy.data.objects.get.return_value = None
 
-        result = load_and_call("blender-objects/scripts/move_object.py", bpy, name="Ghost", location=[0, 0, 0])
+        result = load_and_call(
+            "blender-objects/scripts/move_object.py", bpy, name="Ghost", location=[0, 0, 0]
+        )
         assert result["success"] is False
 
 
@@ -120,7 +130,9 @@ class TestRotateObject:
         obj.rotation_euler = [0.0, 0.0, 0.0]
         bpy.data.objects.get.return_value = obj
 
-        result = load_and_call("blender-objects/scripts/rotate_object.py", bpy, name="Cube", rotation=[90.0, 0.0, 0.0])
+        result = load_and_call(
+            "blender-objects/scripts/rotate_object.py", bpy, name="Cube", rotation=[90.0, 0.0, 0.0]
+        )
         assert result["success"] is True
         # Check that radians were applied
         assert abs(obj.rotation_euler[0] - math.radians(90)) < 1e-6
@@ -128,7 +140,9 @@ class TestRotateObject:
     def test_rotate_nonexistent_returns_error(self):
         bpy = make_mock_bpy()
         bpy.data.objects.get.return_value = None
-        result = load_and_call("blender-objects/scripts/rotate_object.py", bpy, name="Ghost", rotation=[0, 0, 0])
+        result = load_and_call(
+            "blender-objects/scripts/rotate_object.py", bpy, name="Ghost", rotation=[0, 0, 0]
+        )
         assert result["success"] is False
 
 
@@ -148,7 +162,9 @@ class TestScaleObject:
         obj = _make_obj()
         bpy.data.objects.get.return_value = obj
 
-        result = load_and_call("blender-objects/scripts/scale_object.py", bpy, name="Cube", scale=[1.0, 2.0, 3.0])
+        result = load_and_call(
+            "blender-objects/scripts/scale_object.py", bpy, name="Cube", scale=[1.0, 2.0, 3.0]
+        )
         assert result["success"] is True
         assert obj.scale == [1.0, 2.0, 3.0]
 

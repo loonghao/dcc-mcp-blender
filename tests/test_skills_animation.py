@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from tests.conftest import load_and_call, make_mock_bpy
 
 
@@ -55,14 +57,18 @@ class TestSetKeyframe:
 class TestSetFrameRange:
     def test_sets_start_and_end(self):
         bpy = make_mock_bpy()
-        result = load_and_call("blender-animation/scripts/set_frame_range.py", bpy, start=1, end=120)
+        result = load_and_call(
+            "blender-animation/scripts/set_frame_range.py", bpy, start=1, end=120
+        )
         assert result["success"] is True
         assert bpy.context.scene.frame_start == 1
         assert bpy.context.scene.frame_end == 120
 
     def test_invalid_range_returns_error(self):
         bpy = make_mock_bpy()
-        result = load_and_call("blender-animation/scripts/set_frame_range.py", bpy, start=100, end=10)
+        result = load_and_call(
+            "blender-animation/scripts/set_frame_range.py", bpy, start=100, end=10
+        )
         assert result["success"] is False
 
 

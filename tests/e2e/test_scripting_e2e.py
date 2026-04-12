@@ -51,7 +51,9 @@ class TestScriptingSkillsE2E:
 
     def test_execute_python_bpy_access(self):
         mod = load_skill("blender-scripting", "execute_python")
-        result = mod.execute_python(code="import bpy; result = bpy.app.version_string")
+        result = mod.execute_python(
+            code="import bpy; result = bpy.app.version_string"
+        )
         assert result["success"] is True
         assert result["context"]["result"] is not None
 

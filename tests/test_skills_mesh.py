@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from tests.conftest import load_and_call, make_mock_bpy
 
 
@@ -164,7 +166,9 @@ class TestListModifiers:
         obj.modifiers.__iter__ = MagicMock(return_value=iter([mod1]))
         bpy.data.objects.get.return_value = obj
 
-        result = load_and_call("blender-mesh/scripts/list_modifiers.py", bpy, object_name="Cube")
+        result = load_and_call(
+            "blender-mesh/scripts/list_modifiers.py", bpy, object_name="Cube"
+        )
         assert result["success"] is True
         assert result["context"]["count"] == 1
         assert result["context"]["modifiers"][0]["name"] == "Subdivision"
@@ -175,6 +179,8 @@ class TestListModifiers:
         obj.modifiers.__iter__ = MagicMock(return_value=iter([]))
         bpy.data.objects.get.return_value = obj
 
-        result = load_and_call("blender-mesh/scripts/list_modifiers.py", bpy, object_name="Cube")
+        result = load_and_call(
+            "blender-mesh/scripts/list_modifiers.py", bpy, object_name="Cube"
+        )
         assert result["success"] is True
         assert result["context"]["count"] == 0

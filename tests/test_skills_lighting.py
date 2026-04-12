@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from tests.conftest import load_and_call, make_mock_bpy
 
 
@@ -82,7 +84,9 @@ class TestSetLightProperties:
     def test_object_not_found(self):
         bpy = make_mock_bpy()
         bpy.data.objects.get.return_value = None
-        result = load_and_call("blender-lighting/scripts/set_light_properties.py", bpy, name="Ghost")
+        result = load_and_call(
+            "blender-lighting/scripts/set_light_properties.py", bpy, name="Ghost"
+        )
         assert result["success"] is False
 
     def test_non_light_returns_error(self):
@@ -90,7 +94,9 @@ class TestSetLightProperties:
         obj = MagicMock()
         obj.type = "MESH"
         bpy.data.objects.get.return_value = obj
-        result = load_and_call("blender-lighting/scripts/set_light_properties.py", bpy, name="Cube")
+        result = load_and_call(
+            "blender-lighting/scripts/set_light_properties.py", bpy, name="Cube"
+        )
         assert result["success"] is False
 
 

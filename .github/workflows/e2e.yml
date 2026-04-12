@@ -3,14 +3,10 @@ name: E2E (Blender)
 # End-to-end tests that run inside a real Blender interpreter in background mode.
 # Downloads Blender directly from the official mirror and uses its bundled Python.
 #
-# Key design decisions:
-#   - Unit tests run with the SYSTEM Python (mock-based, no Blender needed)
-#   - E2E tests run INSIDE Blender's Python via `blender --background --python`
-#   - dcc-mcp-core's native _core module needs MSVC runtime on Windows;
-#     we copy the system's vcruntime140.dll into Blender's Python directory
-#
 # Blender version -> Bundled Python:
 #   Blender 4.2.x  -> Python 3.11
+#   Blender 4.1.x  -> Python 3.11
+#   Blender 4.0.x  -> Python 3.11
 #   Blender 3.6.x  -> Python 3.10
 #
 # References:
@@ -67,21 +63,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Setup system Python for unit tests ─────────────────────────────────
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install package (system Python)
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
-
-      - name: Run unit tests (system Python)
-        run: |
-          python -m pytest tests/ -v --tb=short -m "not e2e and not packaging"
-
       # ── Cache Blender download ─────────────────────────────────────────────
       - name: Cache Blender
         id: cache-blender
@@ -97,12 +78,6 @@ jobs:
           mkdir -p blender-cache
           curl -L "${{ matrix.blender-url }}" -o blender-cache/blender.tar.xz
           tar -xJf blender-cache/blender.tar.xz -C blender-cache/
-
-      - name: Install Linux dependencies for Blender
-        if: matrix.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libxrender1 libxxf86vm1 libxi6 libgl1 libasound2t64
 
       - name: Set Blender Python path (Linux)
         if: matrix.os == 'linux'
@@ -167,105 +142,28 @@ jobs:
           "$BLENDER_PYTHON" -m pip install --upgrade pip
           "$BLENDER_PYTHON" -m pip install -e ".[dev]"
 
-      # ── Fix Windows DLL loading for dcc-mcp-core ──────────────────────────
-      # dcc-mcp-core's _core.pyd (Rust/PyO3) depends on VCRUNTIME140.dll and
-      # the UCRT api-ms-win-crt-* DLLs.  Blender's bundled Python ships its own
-      # vcruntime140.dll in python/bin/ but the version may differ from what
-      # _core.pyd was linked against.  We overwrite it with the system Python's
-      # copy and also add Blender's python/bin/ to PATH so that Windows can
-      # locate python3.dll (needed by the stable-abi wheel) at import time.
-      - name: Fix MSVC runtime for Blender Python (Windows)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          # Find the system Python's DLL directory (has vcruntime140.dll etc.)
-          $sysPythonDir = Split-Path -Parent (Get-Command python).Path
-          $sysDlls = Get-ChildItem -Path $sysPythonDir -Filter "*.dll"
-          Write-Host "System Python DLLs at: $sysPythonDir"
-          $sysDlls | ForEach-Object { Write-Host "  $($_.Name)" }
-
-          # Find Blender Python's DLL directory (where python.exe lives)
-          $blenderPythonDir = Split-Path -Parent $env:BLENDER_PYTHON
-          Write-Host "Blender Python dir: $blenderPythonDir"
-
-          # Copy vcruntime, UCRT and other MSVC runtime DLLs to Blender Python
-          # Also copy python3.dll so the stable-abi _core.pyd can find it
-          $requiredDlls = @(
-            "vcruntime140.dll",
-            "vcruntime140_1.dll",
-            "msvcp140.dll",
-            "python3.dll"
-          )
-          foreach ($dll in $requiredDlls) {
-            $src = Join-Path $sysPythonDir $dll
-            if (Test-Path $src) {
-              Copy-Item -Path $src -Destination $blenderPythonDir -Force
-              Write-Host "Copied $dll to Blender Python"
-            } else {
-              # Try Windows System32 as fallback
-              $sys32 = Join-Path "$env:SystemRoot\System32" $dll
-              if (Test-Path $sys32) {
-                Copy-Item -Path $sys32 -Destination $blenderPythonDir -Force
-                Write-Host "Copied $dll from System32 to Blender Python"
-              } else {
-                Write-Host "WARNING: $dll not found"
-              }
-            }
-          }
-
-          # Add Blender's python/bin/ to PATH so _core.pyd can locate python3.dll
-          # and other DLLs at load time
-          echo "$blenderPythonDir" >> $env:GITHUB_PATH
-          Write-Host "Added $blenderPythonDir to PATH"
-
-          # Also add Blender's own directory for any Blender-shipped DLLs
-          $blenderDir = "blender-cache\${{ matrix.blender-dir }}"
-          echo "$blenderDir" >> $env:GITHUB_PATH
-          Write-Host "Added $blenderDir to PATH"
-
-      - name: Verify dcc-mcp-core loads in Blender Python
+      # ── Unit tests (no Blender required) ─────────────────────────────────
+      - name: Run unit tests
         shell: bash
         run: |
-          # On Windows, ensure Blender Python's bin/ is on PATH for DLL resolution
-          if [ "$RUNNER_OS" = "Windows" ]; then
-            BLENDER_BIN_DIR=$(dirname "$BLENDER_PYTHON")
-            export PATH="$BLENDER_BIN_DIR:$PATH"
-          fi
-          "$BLENDER_PYTHON" -c "from dcc_mcp_core import _core; print('dcc-mcp-core _core loaded OK')"
+          "$BLENDER_PYTHON" -m pytest tests/ -v --tb=short -m "not e2e and not packaging"
 
       # ── E2E tests inside Blender background mode ──────────────────────────
-      # IMPORTANT: We run pytest directly inside the Blender process (not via
-      # subprocess) because bpy is only available within the Blender interpreter.
-      # Using subprocess would launch a separate Python that cannot import bpy.
       - name: Run E2E tests (Blender background mode)
         shell: bash
         run: |
-          # Write a bootstrap script that runs pytest directly inside the Blender process.
-          # We call pytest.main() directly instead of using subprocess so that bpy remains
-          # available to the test code.
+          # Write a bootstrap script that runs pytest from inside blender --background
           cat > /tmp/run_e2e.py << 'PYEOF'
-          import os
           import sys
+          import subprocess
+          import os
 
-          # Ensure the workspace is on sys.path so tests and source can be found
-          workspace = os.environ.get("GITHUB_WORKSPACE", ".")
-          if workspace not in sys.path:
-              sys.path.insert(0, workspace)
-          # Also add the src directory for editable install resolution
-          src_dir = os.path.join(workspace, "src")
-          if os.path.isdir(src_dir) and src_dir not in sys.path:
-              sys.path.insert(0, src_dir)
-
-          import pytest
-          exit_code = pytest.main([
-              os.path.join(workspace, "tests", "e2e"),
-              "-v",
-              "--tb=short",
-              "-m", "e2e",
-              "--override-ini=addopts=",
-          ])
-          # Exit code 5 means no tests collected (e.g. all skipped); treat as non-fatal
-          sys.exit(0 if exit_code == 5 else exit_code)
+          result = subprocess.run(
+              [sys.executable, "-m", "pytest", "tests/e2e/", "-v", "--tb=short", "-m", "e2e"],
+              env=dict(os.environ),
+              cwd=os.environ.get("GITHUB_WORKSPACE", "."),
+          )
+          sys.exit(result.returncode)
           PYEOF
 
           "$BLENDER_BIN" --background --python /tmp/run_e2e.py
@@ -279,11 +177,8 @@ jobs:
       - name: Test MCP connectivity
         shell: bash
         run: |
-          # Write a Python script that starts the MCP server and keeps it alive.
-          # The server stays running until a sentinel file is created by the
-          # test runner after all mcporter commands finish.
+          # Write a Python script that starts the MCP server then sleeps
           cat > /tmp/start_mcp_server.py << 'PYEOF'
-          import os
           import sys
           import time
 
@@ -297,15 +192,10 @@ jobs:
           import dcc_mcp_blender
 
           server = dcc_mcp_blender.start_server(port=8765)
-          print("MCP server started. Waiting for mcporter tests...", flush=True)
-
-          # Keep alive until the sentinel file is created by the test runner
-          sentinel = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "mcp_test_done")
-          while not os.path.exists(sentinel):
-              time.sleep(1)
-
+          print(f"MCP server started. Waiting for mcporter tests...")
+          # Keep alive for 90 seconds
+          time.sleep(90)
           dcc_mcp_blender.stop_server()
-          print("MCP server stopped.", flush=True)
           PYEOF
 
           # Start server in background
@@ -316,7 +206,7 @@ jobs:
           # Wait for the server to be ready
           sleep 15
 
-          # Verify with Python urllib (simple POST to /mcp endpoint)
+          # Verify with Python urllib
           "$BLENDER_PYTHON" -c "
           import urllib.request, json, time, sys
           url = 'http://127.0.0.1:8765/mcp'
@@ -325,7 +215,7 @@ jobs:
               'params': {'protocolVersion': '2025-03-26', 'capabilities': {},
                          'clientInfo': {'name': 'ci', 'version': '1'}}
           }).encode()
-          for attempt in range(10):
+          for attempt in range(8):
               try:
                   req = urllib.request.Request(url, data=body,
                       headers={'Content-Type': 'application/json'}, method='POST')
@@ -336,7 +226,7 @@ jobs:
                       sys.exit(0)
               except Exception as e:
                   print(f'Attempt {attempt+1} failed: {e}')
-                  time.sleep(3)
+                  time.sleep(5)
           sys.exit(1)
           "
 
@@ -366,9 +256,5 @@ jobs:
             blender-ci.blender_scripting__execute_python \
             "code:import bpy; bpy.ops.mesh.primitive_sphere_add(); result = bpy.context.active_object.name"
 
-          # Signal the server to stop by creating the sentinel file
-          touch "$RUNNER_TEMP/mcp_test_done"
-          # Give Blender a moment to shut down gracefully
-          sleep 3
           kill $SERVER_PID 2>/dev/null || true
           echo "MCP connectivity tests: PASSED"

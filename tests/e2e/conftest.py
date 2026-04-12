@@ -21,6 +21,7 @@ CI::
 from __future__ import annotations
 
 import importlib.util
+import sys
 from pathlib import Path
 
 import pytest
@@ -38,7 +39,7 @@ def pytest_collection_modifyitems(items, config):
     """Skip all e2e tests when bpy is not available."""
     try:
         import bpy  # noqa: F401
-    except Exception:
+    except ImportError:
         skip_marker = pytest.mark.skip(reason="bpy not available — run inside Blender Python interpreter")
         for item in items:
             if "e2e" in item.nodeid:
