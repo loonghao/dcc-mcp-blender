@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dcc-mcp-blender"
+version = "0.1.0"
+description = "Blender addon for the DCC Model Context Protocol (MCP) ecosystem — embeds a Streamable HTTP MCP server directly inside Blender"
+authors = [{ name = "Long Hao", email = "hal.long@outlook.com" }]
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+keywords = ["blender", "mcp", "dcc", "ai", "llm", "model-context-protocol"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Multimedia :: Graphics :: 3D Modeling",
+]
+
+dependencies = [
+    "dcc-mcp-core>=0.12.18,<1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "pytest-mock>=3.0",
+    "ruff>=0.8.0",
+    "hatchling",
+    "build",
+    "pyyaml>=5.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/loonghao/dcc-mcp-blender"
+Repository = "https://github.com/loonghao/dcc-mcp-blender"
+Issues = "https://github.com/loonghao/dcc-mcp-blender/issues"
+Changelog = "https://github.com/loonghao/dcc-mcp-blender/releases"
+
+[project.entry-points."dcc_mcp.adapters"]
+blender = "dcc_mcp_blender:BlenderMcpServer"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dcc_mcp_blender"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short -m 'not e2e and not packaging'"
+markers = [
+    "e2e: end-to-end tests that require a real Blender standalone interpreter",
+    "packaging: tests for packaging/assemble_zip.py that require network access to PyPI",
+]
+
+[tool.coverage.run]
+source = ["dcc_mcp_blender"]
+branch = true
+omit = ["tests/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["dcc_mcp_blender"]

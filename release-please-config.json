@@ -1,0 +1,34 @@
+{
+  "release-type": "python",
+  "packages": {
+    ".": {
+      "package-name": "dcc-mcp-blender",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "pyproject.toml",
+          "jsonpath": "$.project.version"
+        },
+        {
+          "type": "generic",
+          "path": "src/dcc_mcp_blender/__version__.py"
+        }
+      ],
+      "changelog-sections": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Bug Fixes"},
+        {"type": "perf", "section": "Performance Improvements"},
+        {"type": "refactor", "section": "Code Refactoring"},
+        {"type": "docs", "section": "Documentation"},
+        {"type": "style", "section": "Styles"},
+        {"type": "chore", "section": "Miscellaneous Chores"},
+        {"type": "test", "section": "Tests"},
+        {"type": "ci", "section": "Continuous Integration"},
+        {"type": "build", "section": "Build System"}
+      ]
+    }
+  }
+}

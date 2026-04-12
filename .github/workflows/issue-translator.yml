@@ -1,0 +1,17 @@
+name: Issue Translator
+
+on:
+  issue_comment:
+    types: [created]
+  issues:
+    types: [opened]
+
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: usthe/issues-translate-action@v2.7
+        with:
+          IS_MODIFY_TITLE: true
+          IS_MODIFY_BODY: true
+          BOT_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Optional tag name to attach assets to (e.g. v0.1.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write  # for PyPI Trusted Publisher
+
+jobs:
+  # ── 1. release-please ───────────────────────────────────────────────────────
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      upload_url: ${{ steps.release.outputs.upload_url }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # ── 2. build Python wheel ────────────────────────────────────────────────────
+  build:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created || github.event.inputs.tag_name != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tools
+        run: pip install build hatchling
+
+      - name: Build wheel and sdist
+        run: python -m build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # ── 3. publish to PyPI ───────────────────────────────────────────────────────
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [release-please, build]
+    if: ${{ needs.release-please.outputs.release_created || github.event.inputs.tag_name != '' }}
+    environment:
+      name: pypi
+      url: https://pypi.org/p/dcc-mcp-blender
+    permissions:
+      id-token: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  # ── 4. build Blender addon ZIP ───────────────────────────────────────────────
+  build-addon-zip:
+    name: Build Blender Addon ZIP (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created || github.event.inputs.tag_name != '' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: win64
+            runner: windows-latest
+            python-version: "3.11"
+          - platform: linux
+            runner: ubuntu-latest
+            python-version: "3.11"
+          - platform: macos
+            runner: macos-latest
+            python-version: "3.11"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install packaging deps
+        run: pip install requests packaging
+
+      - name: Assemble addon ZIP
+        run: |
+          python packaging/assemble_zip.py \
+            --platform ${{ matrix.platform }} \
+            --output-dir dist_addon/
+
+      - name: Upload addon ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: addon-zip-${{ matrix.platform }}
+          path: dist_addon/*.zip
+
+  # ── 5. attach wheel to GitHub Release ───────────────────────────────────────
+  attach-wheel-release:
+    name: Attach wheel to GitHub Release
+    runs-on: ubuntu-latest
+    needs: [release-please, build]
+    if: ${{ needs.release-please.outputs.release_created }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Attach wheel and sdist to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: dist/*
+
+  # ── 6. attach addon ZIPs to GitHub Release ──────────────────────────────────
+  attach-addon-release:
+    name: Attach addon ZIPs to GitHub Release
+    runs-on: ubuntu-latest
+    needs: [release-please, build-addon-zip]
+    if: ${{ needs.release-please.outputs.release_created }}
+    steps:
+      - name: Download win64 addon
+        uses: actions/download-artifact@v4
+        with:
+          name: addon-zip-win64
+          path: dist_addon/
+
+      - name: Download linux addon
+        uses: actions/download-artifact@v4
+        with:
+          name: addon-zip-linux
+          path: dist_addon/
+
+      - name: Download macos addon
+        uses: actions/download-artifact@v4
+        with:
+          name: addon-zip-macos
+          path: dist_addon/
+
+      - name: Attach addon ZIPs to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: dist_addon/*.zip
