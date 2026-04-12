@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from tests.conftest import load_and_call, make_mock_bpy
 
 
@@ -56,9 +54,7 @@ class TestCreateCamera:
         bpy.data.objects.new.return_value = obj
         bpy.context.scene.collection.objects.link = MagicMock()
 
-        result = load_and_call(
-            "blender-camera/scripts/create_camera.py", bpy, set_as_active=True
-        )
+        result = load_and_call("blender-camera/scripts/create_camera.py", bpy, set_as_active=True)
         assert result["success"] is True
         assert bpy.context.scene.camera == obj
 
@@ -69,18 +65,14 @@ class TestSetActiveCamera:
         obj = _make_camera_obj("RenderCam")
         bpy.data.objects.get.return_value = obj
 
-        result = load_and_call(
-            "blender-camera/scripts/set_active_camera.py", bpy, name="RenderCam"
-        )
+        result = load_and_call("blender-camera/scripts/set_active_camera.py", bpy, name="RenderCam")
         assert result["success"] is True
         assert bpy.context.scene.camera == obj
 
     def test_not_found_returns_error(self):
         bpy = make_mock_bpy()
         bpy.data.objects.get.return_value = None
-        result = load_and_call(
-            "blender-camera/scripts/set_active_camera.py", bpy, name="Ghost"
-        )
+        result = load_and_call("blender-camera/scripts/set_active_camera.py", bpy, name="Ghost")
         assert result["success"] is False
 
     def test_non_camera_returns_error(self):
@@ -88,9 +80,7 @@ class TestSetActiveCamera:
         obj = MagicMock()
         obj.type = "MESH"
         bpy.data.objects.get.return_value = obj
-        result = load_and_call(
-            "blender-camera/scripts/set_active_camera.py", bpy, name="Cube"
-        )
+        result = load_and_call("blender-camera/scripts/set_active_camera.py", bpy, name="Cube")
         assert result["success"] is False
 
 
@@ -100,9 +90,7 @@ class TestSetCameraProperties:
         obj = _make_camera_obj()
         bpy.data.objects.get.return_value = obj
 
-        result = load_and_call(
-            "blender-camera/scripts/set_camera_properties.py", bpy, name="Camera", lens=35.0
-        )
+        result = load_and_call("blender-camera/scripts/set_camera_properties.py", bpy, name="Camera", lens=35.0)
         assert result["success"] is True
         assert obj.data.lens == 35.0
 

@@ -19,7 +19,6 @@ from dcc_mcp_core import (
     McpHttpConfig,
     McpHttpServer,
     scan_and_load,
-    scan_skill_paths,
 )
 
 from dcc_mcp_blender.__version__ import __version__
