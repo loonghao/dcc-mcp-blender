@@ -108,6 +108,7 @@ jobs:
         run: pip install requests packaging
 
       - name: Assemble addon ZIP
+        shell: bash
         run: |
           python packaging/assemble_zip.py \
             --platform ${{ matrix.platform }} \
