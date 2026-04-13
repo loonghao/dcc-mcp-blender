@@ -57,12 +57,14 @@ jobs:
             blender-dir: "blender-4.2.0-windows-x64"
 
           # ── macOS ──────────────────────────────────────────────────────────
+          # macos-13 was retired Dec 2025; macos-latest is now macOS 15 (arm64)
+          # Use arm64 Blender build to match the runner architecture
           - os: macos
-            runner: macos-13
+            runner: macos-latest
             blender-version: "4.2.0"
             blender-python: "3.11"
-            blender-url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-macos-x64.dmg"
-            blender-dir: "blender-4.2.0-macos-x64"
+            blender-url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-macos-arm64.dmg"
+            blender-dir: "blender-4.2.0-macos-arm64"
 
     steps:
       - uses: actions/checkout@v4
