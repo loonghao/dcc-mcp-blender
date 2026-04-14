@@ -98,10 +98,7 @@ class TestSkillPathCollection:
             BlenderMcpServer,
         )
 
-        with (
-            tempfile.TemporaryDirectory() as app_tmp,
-            tempfile.TemporaryDirectory() as global_tmp,
-        ):
+        with tempfile.TemporaryDirectory() as app_tmp, tempfile.TemporaryDirectory() as global_tmp:
             with patch.dict(
                 "os.environ",
                 {

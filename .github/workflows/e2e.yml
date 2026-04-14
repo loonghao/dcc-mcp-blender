@@ -151,7 +151,7 @@ jobs:
           cp -r /Volumes/Blender/Blender.app blender-cache/Blender.app
           hdiutil detach /Volumes/Blender
           BLENDER_PYTHON=$(find blender-cache/Blender.app -name "python3*" -type f | grep -v Scripts | head -1)
-          BLENDER_BIN=$(find blender-cache/Blender.app -name "blender" -type f | head -1)
+          BLENDER_BIN=$(find blender-cache/Blender.app -iname "blender" -type f | head -1)
           echo "BLENDER_PYTHON=$BLENDER_PYTHON" >> $GITHUB_ENV
           echo "BLENDER_BIN=$BLENDER_BIN" >> $GITHUB_ENV
           echo "Using Blender Python: $BLENDER_PYTHON"
