@@ -78,7 +78,9 @@ class TestServerLifecycleE2E:
                     },
                 }
             ).encode()
-            req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+            req = urllib.request.Request(
+                url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+            )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
             assert data["result"]["serverInfo"]["name"] == "dcc-mcp-blender"
@@ -90,13 +92,7 @@ class TestServerLifecycleE2E:
 
 
 class TestProgressiveLoadingE2E:
-    """discover_skills / load_skill / unload_skill inside real Blender.
-
-    ``create_skill_manager()`` (called by ``start_server()``) may eagerly
-    discover AND load all built-in skills at startup.  Every test in this
-    class handles both states (already-loaded and not-yet-loaded) so the
-    tests are robust regardless of the dcc-mcp-core loading strategy.
-    """
+    """discover_skills / load_skill / unload_skill inside real Blender."""
 
     def setup_method(self):
         import dcc_mcp_blender
@@ -114,7 +110,6 @@ class TestProgressiveLoadingE2E:
         server = dcc_mcp_blender.start_server(port=0)
         skills = server.list_skills()
         assert isinstance(skills, list)
-        # create_skill_manager discovers all built-in skills at startup
         assert len(skills) > 0, "Expected at least one skill to be discovered"
 
     def test_find_skills_by_dcc(self):
@@ -122,58 +117,32 @@ class TestProgressiveLoadingE2E:
 
         server = dcc_mcp_blender.start_server(port=0)
         blender_skills = server.find_skills(dcc="blender")
-        assert isinstance(blender_skills, list)
         assert len(blender_skills) > 0
 
-    def test_loaded_skill_count_after_start(self):
-        """After start(), at least one skill should be available (loaded or discovered)."""
+    def test_load_and_unload_skill(self):
         import dcc_mcp_blender
 
         server = dcc_mcp_blender.start_server(port=0)
-        # Either eagerly loaded or just discovered — list_skills() covers both
-        assert len(server.list_skills()) > 0
-
-    def test_unload_and_reload_skill(self):
-        """Unload a skill then reload it — verifies round-trip."""
-        import dcc_mcp_blender
-
-        server = dcc_mcp_blender.start_server(port=0)
-
-        # Pick the first skill that is currently loaded (eager or lazy)
-        loaded = [s for s in server.list_skills() if s.get("loaded") or server.is_skill_loaded(s.get("name", ""))]
-        if not loaded:
-            # create_skill_manager only discovered but did not load — load one now
-            discovered = server.list_skills()
-            if not discovered:
-                return  # no skills at all; nothing to test
-            skill_name = discovered[0].get("name", "blender-scene")
-            server.load_skill(skill_name)
-            loaded = [{"name": skill_name}]
-
-        skill_name = loaded[0].get("name", "blender-scene")
-
-        # Ensure it is loaded before unloading
-        if not server.is_skill_loaded(skill_name):
-            server.load_skill(skill_name)
-
-        removed = server.unload_skill(skill_name)
-        assert removed >= 0  # may be 0 if unload is no-op but doesn't raise
-        assert not server.is_skill_loaded(skill_name)
-
-        # Reload
-        actions = server.load_skill(skill_name)
+        # Load blender-scene skill
+        actions = server.load_skill("blender-scene")
         assert isinstance(actions, list)
-        assert server.is_skill_loaded(skill_name)
+        assert len(actions) > 0
+        assert server.is_skill_loaded("blender-scene")
 
-    def test_discover_extra_paths_no_crash(self):
-        """Calling discover_skills() with no extra paths must not raise."""
+        # Unload it
+        removed = server.unload_skill("blender-scene")
+        assert removed > 0
+        assert not server.is_skill_loaded("blender-scene")
+
+    def test_reload_after_unload(self):
         import dcc_mcp_blender
 
         server = dcc_mcp_blender.start_server(port=0)
-        # May return 0 if all skills were already discovered at startup
-        count = server.discover_skills()
-        assert isinstance(count, int)
-        assert count >= 0
+        server.load_skill("blender-scene")
+        server.unload_skill("blender-scene")
+        # Should be loadable again
+        actions = server.load_skill("blender-scene")
+        assert len(actions) > 0
 
 
 # ── Multi-instance gateway ────────────────────────────────────────────────────
