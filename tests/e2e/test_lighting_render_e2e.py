@@ -177,23 +177,24 @@ class TestRenderSkillsE2E:
         assert bpy.context.scene.cycles.samples == 64
 
     def test_render_scene_to_file(self, tmp_path):
-        """Render a minimal scene to verify render_scene runs.
+        """Render a minimal 32×32 scene with CYCLES (CPU) to verify render_scene.
 
-        Skipped on headless CI runners where GPU rendering crashes Blender.
-        Set DCC_MCP_ALLOW_RENDER=1 to force-enable this test.
+        CYCLES uses CPU rendering by default in ``--background`` mode — no GPU,
+        no OpenGL context required.  Runs on Linux, Windows, and macOS CI runners.
+
+        BLENDER_WORKBENCH / BLENDER_EEVEE require an OpenGL / Metal context that
+        is unavailable on headless Linux / Windows runners and cause SIGABRT.
         """
-        import os
-
-        if not os.environ.get("DCC_MCP_ALLOW_RENDER"):
-            pytest.skip("Rendering skipped in headless CI (set DCC_MCP_ALLOW_RENDER=1 to enable)")
-
         bpy.ops.mesh.primitive_cube_add()
         bpy.ops.object.camera_add()
         bpy.context.scene.camera = bpy.context.active_object
         scene = bpy.context.scene
-        scene.render.engine = "BLENDER_WORKBENCH"
-        scene.render.resolution_x = 64
-        scene.render.resolution_y = 64
+
+        # Minimal CYCLES render: 1 sample, 32×32 → completes in < 1 s on CI.
+        scene.render.engine = "CYCLES"
+        scene.cycles.samples = 1
+        scene.render.resolution_x = 32
+        scene.render.resolution_y = 32
         scene.render.resolution_percentage = 100
 
         out_path = str(tmp_path / "e2e_render.png")

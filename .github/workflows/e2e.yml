@@ -306,8 +306,12 @@ jobs:
               "-m", "e2e",
               "--override-ini=addopts=",
           ])
-          # Exit code 5 means no tests collected (e.g. all skipped); treat as non-fatal
-          sys.exit(0 if exit_code == 5 else exit_code)
+          # Exit code 5 means no tests collected (all skipped); treat as success.
+          # Use os._exit() instead of sys.exit(): calling sys.exit() inside Blender's
+          # background process on Linux triggers Blender's C++ cleanup which tries to
+          # destroy X11/OpenGL resources that were never initialised, causing SIGABRT.
+          # os._exit() bypasses all destructors and exits immediately and safely.
+          os._exit(0 if exit_code == 5 else exit_code)
           PYEOF
 
           "$BLENDER_BIN" --background --python /tmp/run_e2e.py
