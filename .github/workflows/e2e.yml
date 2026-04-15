@@ -338,9 +338,18 @@ jobs:
 
           import dcc_mcp_blender
 
-          # Start server — create_skill_manager discovers all skills automatically
+          # Start server — create_skill_manager discovers all skills automatically.
+          # Then eagerly load all skills so their tools are registered for
+          # mcporter to call (progressive loading only registers metadata).
           server = dcc_mcp_blender.start_server(port=8765)
           print(f"MCP server started at {server.mcp_url()}", flush=True)
+          for skill in server.list_skills():
+              name = skill.get("name", "")
+              if name and not server.is_skill_loaded(name):
+                  try:
+                      server.load_skill(name)
+                  except Exception as exc:
+                      print(f"WARNING: failed to load skill {name}: {exc}", flush=True)
           print(f"Loaded skills: {server.loaded_skill_count()}", flush=True)
           print(f"All skills: {[s.get('name', '?') for s in server.list_skills()]}", flush=True)
 
@@ -490,8 +499,9 @@ jobs:
             MCP_URL2=$(cat "$URL2_FILE")
             echo "Testing second MCP instance at: $MCP_URL2"
             "$BLENDER_PYTHON" -c "
-          import urllib.request, json, sys
-          url = open('$URL2_FILE').read().strip()
+          import os, urllib.request, json, sys
+          url_file = os.path.join(os.environ.get('RUNNER_TEMP', '/tmp'), 'mcp_server2_url')
+          url = open(url_file).read().strip()
           body = json.dumps({'jsonrpc':'2.0','id':0,'method':'initialize',
               'params':{'protocolVersion':'2025-03-26','capabilities':{},
                         'clientInfo':{'name':'ci2','version':'1'}}}).encode()
