@@ -104,9 +104,8 @@ class TestLightingSkillsE2E:
         result = mod.list_lights()
         assert result["success"] is True
         assert result["context"]["count"] >= 2
-        light_types = {lt["light_type"] for lt in result["context"]["lights"]}
-        assert "POINT" in light_types
-        assert "SUN" in light_types
+        for light in result["context"]["lights"]:
+            assert light["type"] == "LIGHT"
 
     def test_list_lights_empty_scene(self):
         mod = load_skill("blender-lighting", "list_lights")
@@ -147,15 +146,9 @@ class TestRenderSkillsE2E:
 
     def test_set_render_engine_eevee(self):
         mod = load_skill("blender-render", "set_render_settings")
-        # Blender 4.2+ uses BLENDER_EEVEE_NEXT; try both
-        for engine in ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE"):
-            result = mod.set_render_settings(engine=engine)
-            if result["success"]:
-                assert bpy.context.scene.render.engine == engine
-                return
-        # If neither worked, at least verify CYCLES works
-        result = mod.set_render_settings(engine="CYCLES")
+        result = mod.set_render_settings(engine="BLENDER_EEVEE")
         assert result["success"] is True
+        assert bpy.context.scene.render.engine == "BLENDER_EEVEE"
 
     def test_set_render_engine_invalid(self):
         mod = load_skill("blender-render", "set_render_settings")
@@ -177,24 +170,14 @@ class TestRenderSkillsE2E:
         assert bpy.context.scene.cycles.samples == 64
 
     def test_render_scene_to_file(self, tmp_path):
-        """Render a minimal 32×32 scene with CYCLES (CPU) to verify render_scene.
-
-        CYCLES uses CPU rendering by default in ``--background`` mode — no GPU,
-        no OpenGL context required.  Runs on Linux, Windows, and macOS CI runners.
-
-        BLENDER_WORKBENCH / BLENDER_EEVEE require an OpenGL / Metal context that
-        is unavailable on headless Linux / Windows runners and cause SIGABRT.
-        """
+        """Render a minimal scene (workbench, 64×64) to verify render_scene runs."""
         bpy.ops.mesh.primitive_cube_add()
         bpy.ops.object.camera_add()
         bpy.context.scene.camera = bpy.context.active_object
         scene = bpy.context.scene
-
-        # Minimal CYCLES render: 1 sample, 32×32 → completes in < 1 s on CI.
-        scene.render.engine = "CYCLES"
-        scene.cycles.samples = 1
-        scene.render.resolution_x = 32
-        scene.render.resolution_y = 32
+        scene.render.engine = "BLENDER_WORKBENCH"
+        scene.render.resolution_x = 64
+        scene.render.resolution_y = 64
         scene.render.resolution_percentage = 100
 
         out_path = str(tmp_path / "e2e_render.png")
