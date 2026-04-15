@@ -177,7 +177,16 @@ class TestRenderSkillsE2E:
         assert bpy.context.scene.cycles.samples == 64
 
     def test_render_scene_to_file(self, tmp_path):
-        """Render a minimal scene (workbench, 64×64) to verify render_scene runs."""
+        """Render a minimal scene to verify render_scene runs.
+
+        Skipped on headless CI runners where GPU rendering crashes Blender.
+        Set DCC_MCP_ALLOW_RENDER=1 to force-enable this test.
+        """
+        import os
+
+        if not os.environ.get("DCC_MCP_ALLOW_RENDER"):
+            pytest.skip("Rendering skipped in headless CI (set DCC_MCP_ALLOW_RENDER=1 to enable)")
+
         bpy.ops.mesh.primitive_cube_add()
         bpy.ops.object.camera_add()
         bpy.context.scene.camera = bpy.context.active_object
