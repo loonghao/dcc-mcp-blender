@@ -78,9 +78,7 @@ class TestServerLifecycleE2E:
                     },
                 }
             ).encode()
-            req = urllib.request.Request(
-                url, data=body, headers={"Content-Type": "application/json"}, method="POST"
-            )
+            req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read())
             assert data["result"]["serverInfo"]["name"] == "dcc-mcp-blender"

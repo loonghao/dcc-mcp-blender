@@ -116,7 +116,7 @@ class TestCollectionSkillsE2E:
         mod = load_skill("blender-collection", "list_collections")
         result = mod.list_collections()
         assert result["success"] is True
-        names = [c["name"] for c in result["context"]["collections"]]
+        names = result["context"]["collections"]
         assert "ColA" in names
         assert "ColB" in names
 
