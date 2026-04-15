@@ -2,34 +2,33 @@
 
 from __future__ import annotations
 
-from dcc_mcp_core.models import DccCapabilities
+from dcc_mcp_core import DccCapabilities
 
+# Blender supports all four cross-DCC protocol traits and has embedded Python.
+# Additional Blender-specific capabilities are listed in the ``extensions`` dict.
 _BLENDER_CAPS = DccCapabilities(
-    dcc_name="blender",
-    supported_features=[
-        "scene_manager",
-        "transform",
-        "hierarchy",
-        "selection",
-        "render_capture",
-        "snapshot",
-        "undo_redo",
-        "file_operations",
-        "has_embedded_python",
-        "progress_reporting",
-        "scene_info",
-        "modifier_stack",
-        "node_editor",
-        "geometry_nodes",
-        "shader_nodes",
-        "particle_system",
-        "physics_simulation",
-        "animation_system",
-        "collection_management",
-    ],
+    scene_manager=True,
+    transform=True,
+    hierarchy=True,
+    render_capture=True,
+    selection=True,
+    snapshot=True,
+    undo_redo=True,
+    file_operations=True,
+    has_embedded_python=True,
+    progress_reporting=True,
+    scene_info=True,
+    extensions={
+        "modifier_stack": True,
+        "node_editor": True,
+        "geometry_nodes": True,
+        "shader_nodes": True,
+        "particle_system": True,
+        "physics_simulation": True,
+        "animation_system": True,
+        "collection_management": True,
+    },
 )
-
-BLENDER_CAPABILITIES_DICT: dict = _BLENDER_CAPS.model_dump()
 
 
 def blender_capabilities() -> DccCapabilities:
@@ -39,3 +38,26 @@ def blender_capabilities() -> DccCapabilities:
         DccCapabilities instance describing all supported Blender features.
     """
     return _BLENDER_CAPS
+
+
+def blender_capabilities_dict() -> dict:
+    """Return the Blender capabilities as a plain Python dict.
+
+    Returns:
+        dict with capability fields suitable for JSON serialisation.
+    """
+    caps = _BLENDER_CAPS
+    return {
+        "scene_manager": caps.scene_manager,
+        "transform": caps.transform,
+        "hierarchy": caps.hierarchy,
+        "render_capture": caps.render_capture,
+        "selection": caps.selection,
+        "snapshot": caps.snapshot,
+        "undo_redo": caps.undo_redo,
+        "file_operations": caps.file_operations,
+        "has_embedded_python": caps.has_embedded_python,
+        "progress_reporting": caps.progress_reporting,
+        "scene_info": caps.scene_info,
+        "extensions": caps.extensions,
+    }
