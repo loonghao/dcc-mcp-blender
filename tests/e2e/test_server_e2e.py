@@ -1,0 +1,189 @@
+"""E2E tests for BlenderMcpServer progressive loading and multi-instance gateway.
+
+These tests run inside a real Blender Python interpreter and verify that the
+server can:
+
+ * Start and expose the MCP endpoint
+ * Discover skills (metadata-only, no script import)
+ * Lazy-load a skill on demand
+ * Unload a skill and reload it
+ * Start a second instance on a different port (multi-instance gateway)
+
+Run::
+
+    blender --background --python -m pytest tests/e2e/test_server_e2e.py -- -v
+"""
+
+from __future__ import annotations
+
+import pytest
+
+bpy = pytest.importorskip("bpy", reason="bpy not available — run inside Blender Python interpreter")
+
+pytestmark = pytest.mark.e2e
+
+
+def _new_scene():
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+
+
+# ── Server lifecycle ──────────────────────────────────────────────────────────
+
+
+class TestServerLifecycleE2E:
+    """Start / stop the MCP server inside a real Blender session."""
+
+    def test_start_and_stop(self):
+        import dcc_mcp_blender
+
+        server = dcc_mcp_blender.start_server(port=0)
+        try:
+            assert server.is_running()
+            url = server.mcp_url()
+            assert url is not None
+            assert url.startswith("http://127.0.0.1:")
+        finally:
+            dcc_mcp_blender.stop_server()
+            assert not server.is_running()
+
+    def test_start_idempotent(self):
+        import dcc_mcp_blender
+
+        s1 = dcc_mcp_blender.start_server(port=0)
+        try:
+            s2 = dcc_mcp_blender.start_server(port=0)
+            assert s1 is s2
+        finally:
+            dcc_mcp_blender.stop_server()
+
+    def test_mcp_initialize_handshake(self):
+        """Verify the server responds to an MCP initialize request."""
+        import json
+        import urllib.request
+
+        import dcc_mcp_blender
+
+        server = dcc_mcp_blender.start_server(port=0)
+        try:
+            url = server.mcp_url()
+            body = json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 0,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2025-03-26",
+                        "capabilities": {},
+                        "clientInfo": {"name": "e2e-test", "version": "1"},
+                    },
+                }
+            ).encode()
+            req = urllib.request.Request(
+                url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+            assert data["result"]["serverInfo"]["name"] == "dcc-mcp-blender"
+        finally:
+            dcc_mcp_blender.stop_server()
+
+
+# ── Progressive skill loading ─────────────────────────────────────────────────
+
+
+class TestProgressiveLoadingE2E:
+    """discover_skills / load_skill / unload_skill inside real Blender."""
+
+    def setup_method(self):
+        import dcc_mcp_blender
+
+        dcc_mcp_blender.stop_server()
+
+    def teardown_method(self):
+        import dcc_mcp_blender
+
+        dcc_mcp_blender.stop_server()
+
+    def test_list_skills_returns_skills(self):
+        import dcc_mcp_blender
+
+        server = dcc_mcp_blender.start_server(port=0)
+        skills = server.list_skills()
+        assert isinstance(skills, list)
+        assert len(skills) > 0, "Expected at least one skill to be discovered"
+
+    def test_find_skills_by_dcc(self):
+        import dcc_mcp_blender
+
+        server = dcc_mcp_blender.start_server(port=0)
+        blender_skills = server.find_skills(dcc="blender")
+        assert len(blender_skills) > 0
+
+    def test_load_and_unload_skill(self):
+        import dcc_mcp_blender
+
+        server = dcc_mcp_blender.start_server(port=0)
+        # Load blender-scene skill
+        actions = server.load_skill("blender-scene")
+        assert isinstance(actions, list)
+        assert len(actions) > 0
+        assert server.is_skill_loaded("blender-scene")
+
+        # Unload it
+        removed = server.unload_skill("blender-scene")
+        assert removed > 0
+        assert not server.is_skill_loaded("blender-scene")
+
+    def test_reload_after_unload(self):
+        import dcc_mcp_blender
+
+        server = dcc_mcp_blender.start_server(port=0)
+        server.load_skill("blender-scene")
+        server.unload_skill("blender-scene")
+        # Should be loadable again
+        actions = server.load_skill("blender-scene")
+        assert len(actions) > 0
+
+
+# ── Multi-instance gateway ────────────────────────────────────────────────────
+
+
+class TestMultiInstanceGatewayE2E:
+    """Two BlenderMcpServer instances can run simultaneously on different ports."""
+
+    def test_two_instances_on_different_ports(self):
+        """Start two servers, verify each responds independently."""
+        import json
+        import urllib.request
+
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        s1 = BlenderMcpServer(port=0)
+        s2 = BlenderMcpServer(port=0)
+        s1.start()
+        s2.start()
+        try:
+            assert s1.port != s2.port, "Servers must listen on different ports"
+            for server in (s1, s2):
+                url = server.mcp_url()
+                body = json.dumps(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 0,
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2025-03-26",
+                            "capabilities": {},
+                            "clientInfo": {"name": "e2e-gateway", "version": "1"},
+                        },
+                    }
+                ).encode()
+                req = urllib.request.Request(
+                    url, data=body, headers={"Content-Type": "application/json"}, method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read())
+                assert data["result"]["serverInfo"]["name"] == "dcc-mcp-blender"
+        finally:
+            s1.stop()
+            s2.stop()

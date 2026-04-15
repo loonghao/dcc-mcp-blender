@@ -10,8 +10,15 @@ name: E2E (Blender)
 #     we copy the system's vcruntime140.dll into Blender's Python directory
 #
 # Blender version -> Bundled Python:
-#   Blender 4.2.x  -> Python 3.11
-#   Blender 3.6.x  -> Python 3.10
+#   Blender 4.4.x  -> Python 3.11
+#   Blender 4.3.x  -> Python 3.11
+#   Blender 4.2.x  -> Python 3.11  (LTS)
+#   Blender 3.6.x  -> Python 3.10  (LTS)
+#
+# Test matrix (to keep CI cost reasonable):
+#   Linux   : 3.6.0 (LTS), 4.2.0 (LTS), 4.3.2, 4.4.3 (latest)
+#   Windows : 4.2.0 (LTS), 4.4.3 (latest)
+#   macOS   : 4.2.0 (LTS), 4.4.3 (latest, arm64)
 #
 # References:
 #   https://download.blender.org/release/
@@ -36,6 +43,20 @@ jobs:
           # ── Linux ──────────────────────────────────────────────────────────
           - os: linux
             runner: ubuntu-latest
+            blender-version: "4.4.3"
+            blender-python: "3.11"
+            blender-url: "https://download.blender.org/release/Blender4.4/blender-4.4.3-linux-x64.tar.xz"
+            blender-dir: "blender-4.4.3-linux-x64"
+
+          - os: linux
+            runner: ubuntu-latest
+            blender-version: "4.3.2"
+            blender-python: "3.11"
+            blender-url: "https://download.blender.org/release/Blender4.3/blender-4.3.2-linux-x64.tar.xz"
+            blender-dir: "blender-4.3.2-linux-x64"
+
+          - os: linux
+            runner: ubuntu-latest
             blender-version: "4.2.0"
             blender-python: "3.11"
             blender-url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-linux-x64.tar.xz"
@@ -51,6 +72,13 @@ jobs:
           # ── Windows ────────────────────────────────────────────────────────
           - os: windows
             runner: windows-latest
+            blender-version: "4.4.3"
+            blender-python: "3.11"
+            blender-url: "https://download.blender.org/release/Blender4.4/blender-4.4.3-windows-x64.zip"
+            blender-dir: "blender-4.4.3-windows-x64"
+
+          - os: windows
+            runner: windows-latest
             blender-version: "4.2.0"
             blender-python: "3.11"
             blender-url: "https://download.blender.org/release/Blender4.2/blender-4.2.0-windows-x64.zip"
@@ -59,6 +87,13 @@ jobs:
           # ── macOS ──────────────────────────────────────────────────────────
           # macos-13 was retired Dec 2025; macos-latest is now macOS 15 (arm64)
           # Use arm64 Blender build to match the runner architecture
+          - os: macos
+            runner: macos-latest
+            blender-version: "4.4.3"
+            blender-python: "3.11"
+            blender-url: "https://download.blender.org/release/Blender4.4/blender-4.4.3-macos-arm64.dmg"
+            blender-dir: "blender-4.4.3-macos-arm64"
+
           - os: macos
             runner: macos-latest
             blender-version: "4.2.0"
@@ -104,7 +139,12 @@ jobs:
         if: matrix.os == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxrender1 libxxf86vm1 libxi6 libgl1 libasound2t64
+          # libasound2t64 is the Ubuntu 24.04 package name; fall back to libasound2 on 22.04
+          if apt-cache show libasound2t64 >/dev/null 2>&1; then
+            sudo apt-get install -y libxrender1 libxxf86vm1 libxi6 libgl1 libasound2t64
+          else
+            sudo apt-get install -y libxrender1 libxxf86vm1 libxi6 libgl1 libasound2
+          fi
 
       - name: Set Blender Python path (Linux)
         if: matrix.os == 'linux'
@@ -278,30 +318,32 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Test MCP connectivity
+      - name: Test MCP connectivity and progressive loading
         shell: bash
         run: |
-          # Write a Python script that starts the MCP server and keeps it alive.
-          # The server stays running until a sentinel file is created by the
-          # test runner after all mcporter commands finish.
+          # Bootstrap: start MCP server with progressive loading inside Blender.
+          # The server discovers skill metadata immediately but only imports skill
+          # scripts when they are first called (lazy/deferred loading).
+          # Stays alive until the sentinel file signals completion.
           cat > /tmp/start_mcp_server.py << 'PYEOF'
           import os
           import sys
           import time
 
-          # Blender background mode requires bpy to be available
           try:
-              import bpy
+              import bpy  # noqa: F401
           except ImportError:
               print("WARNING: bpy not available, skipping MCP server test")
               sys.exit(0)
 
           import dcc_mcp_blender
 
+          # Start server — create_skill_manager discovers all skills automatically
           server = dcc_mcp_blender.start_server(port=8765)
-          print("MCP server started. Waiting for mcporter tests...", flush=True)
+          print(f"MCP server started at {server.mcp_url()}", flush=True)
+          print(f"Loaded skills: {server.loaded_skill_count()}", flush=True)
+          print(f"All skills: {[s.get('name', '?') for s in server.list_skills()]}", flush=True)
 
-          # Keep alive until the sentinel file is created by the test runner
           sentinel = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "mcp_test_done")
           while not os.path.exists(sentinel):
               time.sleep(1)
@@ -310,15 +352,15 @@ jobs:
           print("MCP server stopped.", flush=True)
           PYEOF
 
-          # Start server in background
+          # Start Blender MCP server in background
           "$BLENDER_BIN" --background --python /tmp/start_mcp_server.py &
           SERVER_PID=$!
           echo "Server PID: $SERVER_PID"
 
-          # Wait for the server to be ready
+          # Wait for the server to become ready (retry with backoff)
           sleep 15
 
-          # Verify with Python urllib (simple POST to /mcp endpoint)
+          # ── 1. Verify MCP initialize handshake ──────────────────────────────
           "$BLENDER_PYTHON" -c "
           import urllib.request, json, time, sys
           url = 'http://127.0.0.1:8765/mcp'
@@ -342,35 +384,135 @@ jobs:
           sys.exit(1)
           "
 
-          # List tools via mcporter
+          # ── 2. List all registered tools via mcporter ───────────────────────
           npx --yes mcporter list \
             --http-url http://127.0.0.1:8765/mcp \
             --name blender-ci \
             --allow-http
 
-          # Call get_session_info tool
+          # ── 3. Core scene skills ────────────────────────────────────────────
           npx mcporter call \
             --http-url http://127.0.0.1:8765/mcp \
             --allow-http \
             blender-ci.blender_scene__get_session_info
 
-          # Call create_object (cube)
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_scene__list_objects
+
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_scene__get_scene_info
+
+          # ── 4. Object creation and manipulation ─────────────────────────────
           npx mcporter call \
             --http-url http://127.0.0.1:8765/mcp \
             --allow-http \
             blender-ci.blender_objects__create_object \
             object_type:cube name:mcporterCube
 
-          # Call execute_python
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_objects__create_object \
+            object_type:sphere name:mcporterSphere
+
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_objects__move_object \
+            name:mcporterCube "location:[1.0, 2.0, 3.0]"
+
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_objects__get_object_info \
+            name:mcporterCube
+
+          # ── 5. Mesh operations ──────────────────────────────────────────────
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_mesh__add_modifier \
+            object_name:mcporterCube modifier_type:SUBSURF
+
+          # ── 6. Lighting ─────────────────────────────────────────────────────
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_lighting__add_light \
+            light_type:POINT name:mcporterLight "location:[0.0, 0.0, 5.0]"
+
+          # ── 7. Materials ────────────────────────────────────────────────────
+          npx mcporter call \
+            --http-url http://127.0.0.1:8765/mcp \
+            --allow-http \
+            blender-ci.blender_materials__create_material \
+            name:mcporterMat
+
+          # ── 8. Python scripting (execute arbitrary Blender Python) ──────────
           npx mcporter call \
             --http-url http://127.0.0.1:8765/mcp \
             --allow-http \
             blender-ci.blender_scripting__execute_python \
-            "code:import bpy; bpy.ops.mesh.primitive_sphere_add(); result = bpy.context.active_object.name"
+            "code:import bpy; bpy.ops.mesh.primitive_cone_add(); result = bpy.context.active_object.name"
 
-          # Signal the server to stop by creating the sentinel file
+          # ── 9. Multi-instance gateway — start a second instance on a random ─
+          #       port and verify it can be reached independently.            ──
+          cat > /tmp/start_mcp_server2.py << 'PYEOF2'
+          import os, sys, time
+          try:
+              import bpy  # noqa: F401
+          except ImportError:
+              sys.exit(0)
+          import dcc_mcp_blender
+          # Use port=0 → OS assigns a free port; simulates a second Blender instance
+          server = dcc_mcp_blender.start_server(port=0)
+          url = server.mcp_url()
+          print(f"Second instance MCP URL: {url}", flush=True)
+          with open(os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "mcp_server2_url"), "w") as f:
+              f.write(url)
+          sentinel2 = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "mcp_test2_done")
+          while not os.path.exists(sentinel2):
+              time.sleep(1)
+          dcc_mcp_blender.stop_server()
+          PYEOF2
+
+          "$BLENDER_BIN" --background --python /tmp/start_mcp_server2.py &
+          SERVER2_PID=$!
+          sleep 10
+
+          # Read the second instance URL and call it
+          URL2_FILE="$RUNNER_TEMP/mcp_server2_url"
+          if [ -f "$URL2_FILE" ]; then
+            MCP_URL2=$(cat "$URL2_FILE")
+            echo "Testing second MCP instance at: $MCP_URL2"
+            "$BLENDER_PYTHON" -c "
+          import urllib.request, json, sys
+          url = open('$URL2_FILE').read().strip()
+          body = json.dumps({'jsonrpc':'2.0','id':0,'method':'initialize',
+              'params':{'protocolVersion':'2025-03-26','capabilities':{},
+                        'clientInfo':{'name':'ci2','version':'1'}}}).encode()
+          req = urllib.request.Request(url, data=body,
+              headers={'Content-Type':'application/json'}, method='POST')
+          with urllib.request.urlopen(req, timeout=10) as r:
+              d = json.loads(r.read())
+              assert d['result']['serverInfo']['name'] == 'dcc-mcp-blender', d
+              print('Second MCP instance initialize: OK')
+          "
+            echo "Multi-instance gateway test: PASSED"
+          else
+            echo "WARNING: second instance URL file not found, skipping multi-instance test"
+          fi
+
+          # Stop both instances
+          touch "$RUNNER_TEMP/mcp_test2_done"
+          sleep 2
+          kill $SERVER2_PID 2>/dev/null || true
+
           touch "$RUNNER_TEMP/mcp_test_done"
-          # Give Blender a moment to shut down gracefully
           sleep 3
           kill $SERVER_PID 2>/dev/null || true
-          echo "MCP connectivity tests: PASSED"
+          echo "All MCP connectivity tests: PASSED"

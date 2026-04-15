@@ -159,6 +159,104 @@ class TestServerLifecycle:
         server = BlenderMcpServer(port=0)
         server.stop()  # should not raise
 
+    def test_port_updated_after_start(self):
+        """port is updated to the actual OS-assigned port when port=0."""
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        server.start()
+        try:
+            assert server.port != 0, "port should be updated to the assigned port"
+            assert server.port > 0
+        finally:
+            server.stop()
+
+    def test_mcp_url_contains_port(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        server.start()
+        try:
+            url = server.mcp_url()
+            assert str(server.port) in url
+        finally:
+            server.stop()
+
+
+class TestProgressiveLoading:
+    """Progressive skill loading API: discover_skills / load_skill / unload_skill."""
+
+    def test_list_skills_returns_list_before_start(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        # Should return empty list when server not started (no crash)
+        assert server.list_skills() == []
+
+    def test_find_skills_returns_list_before_start(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        assert server.find_skills() == []
+
+    def test_discover_skills_returns_zero_before_start(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        assert server.discover_skills() == 0
+
+    def test_loaded_skill_count_before_start(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        assert server.loaded_skill_count() == 0
+
+    def test_is_skill_loaded_before_start(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        assert not server.is_skill_loaded("blender-scene")
+
+    def test_load_skill_raises_when_not_running(self):
+        import pytest
+
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        with pytest.raises(RuntimeError, match="not running"):
+            server.load_skill("blender-scene")
+
+    def test_unload_skill_raises_when_not_running(self):
+        import pytest
+
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        with pytest.raises(RuntimeError, match="not running"):
+            server.unload_skill("blender-scene")
+
+    def test_list_skills_after_start(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        server.start()
+        try:
+            skills = server.list_skills()
+            assert isinstance(skills, list)
+        finally:
+            server.stop()
+
+    def test_find_skills_after_start(self):
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        server.start()
+        try:
+            results = server.find_skills(dcc="blender")
+            assert isinstance(results, list)
+        finally:
+            server.stop()
+
 
 class TestModuleSingleton:
     """Module-level start_server / stop_server singleton pattern."""
