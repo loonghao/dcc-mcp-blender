@@ -46,13 +46,13 @@ class TestBlenderMcpServerBasic:
         from dcc_mcp_blender.server import BlenderMcpServer
 
         server = BlenderMcpServer()
-        assert not server.is_running()
+        assert not server.is_running
 
     def test_mcp_url_none_when_not_running(self):
         from dcc_mcp_blender.server import BlenderMcpServer
 
         server = BlenderMcpServer()
-        assert server.mcp_url() is None
+        assert server.mcp_url is None
 
 
 class TestSkillPathCollection:
@@ -136,12 +136,12 @@ class TestServerLifecycle:
 
         server = BlenderMcpServer(port=0)
         server.start()
-        assert server.is_running()
-        url = server.mcp_url()
+        assert server.is_running
+        url = server.mcp_url
         assert url is not None
         assert "http://127.0.0.1:" in url
         server.stop()
-        assert not server.is_running()
+        assert not server.is_running
 
     def test_start_idempotent(self):
         from dcc_mcp_blender.server import BlenderMcpServer
@@ -177,7 +177,7 @@ class TestServerLifecycle:
         server = BlenderMcpServer(port=0)
         server.start()
         try:
-            url = server.mcp_url()
+            url = server.mcp_url
             assert str(server.port) in url
         finally:
             server.stop()
