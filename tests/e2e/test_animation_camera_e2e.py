@@ -9,8 +9,6 @@ Run::
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 bpy = pytest.importorskip("bpy", reason="bpy not available — run inside Blender Python interpreter")
