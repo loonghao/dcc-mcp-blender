@@ -41,9 +41,9 @@ jobs:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -54,7 +54,7 @@ jobs:
         run: python -m build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
@@ -72,7 +72,7 @@ jobs:
       id-token: write
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -104,9 +104,9 @@ jobs:
             python-version: "3.11"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -121,7 +121,7 @@ jobs:
             --output-dir dist_addon/
 
       - name: Upload addon ZIP artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: addon-zip-${{ matrix.platform }}
           path: dist_addon/*.zip
@@ -134,7 +134,7 @@ jobs:
     if: needs.release-please.outputs.release_created == 'true'
     steps:
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: dist
           path: dist/
@@ -153,19 +153,19 @@ jobs:
     if: needs.release-please.outputs.release_created == 'true'
     steps:
       - name: Download win64 addon
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: addon-zip-win64
           path: dist_addon/
 
       - name: Download linux addon
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: addon-zip-linux
           path: dist_addon/
 
       - name: Download macos addon
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: addon-zip-macos
           path: dist_addon/
