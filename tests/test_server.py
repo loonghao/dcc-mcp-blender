@@ -310,9 +310,7 @@ class TestProgressiveLoading:
         try:
             result = server.find_skills(query="scene", tags=["blender"], dcc="blender")
             assert result == [{"name": "blender-scene"}]
-            mock_inner.find_skills.assert_called_once_with(
-                query="scene", tags=["blender"], dcc="blender"
-            )
+            mock_inner.find_skills.assert_called_once_with(query="scene", tags=["blender"], dcc="blender")
         finally:
             server.stop()
 
@@ -417,9 +415,7 @@ class TestProgressiveLoading:
         mock_inner.load_skill.side_effect = lambda name: (
             loaded_state.__setitem__(name, True) or ["action_a", "action_b"]
         )
-        mock_inner.unload_skill.side_effect = lambda name: (
-            loaded_state.__setitem__(name, False) or 2
-        )
+        mock_inner.unload_skill.side_effect = lambda name: loaded_state.__setitem__(name, False) or 2
         mock_inner.is_loaded.side_effect = lambda name: loaded_state.get(name, False)
         mock_inner.loaded_count.side_effect = lambda: sum(loaded_state.values())
 
