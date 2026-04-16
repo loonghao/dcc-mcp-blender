@@ -380,7 +380,7 @@ class TestProgressiveLoading:
     def test_discover_skills_extra_paths_prepended(self):
         """Extra paths passed to discover_skills() appear before built-ins."""
         import tempfile
-        from unittest.mock import MagicMock, call
+        from unittest.mock import MagicMock
 
         mock_inner = MagicMock()
         mock_inner.discover.return_value = 2

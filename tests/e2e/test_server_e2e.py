@@ -38,13 +38,13 @@ class TestServerLifecycleE2E:
 
         server = dcc_mcp_blender.start_server(port=0)
         try:
-            assert server.is_running()
-            url = server.mcp_url()
+            assert server.is_running
+            url = server.mcp_url
             assert url is not None
             assert url.startswith("http://127.0.0.1:")
         finally:
             dcc_mcp_blender.stop_server()
-            assert not server.is_running()
+            assert not server.is_running
 
     def test_start_idempotent(self):
         import dcc_mcp_blender
@@ -65,7 +65,7 @@ class TestServerLifecycleE2E:
 
         server = dcc_mcp_blender.start_server(port=0)
         try:
-            url = server.mcp_url()
+            url = server.mcp_url
             body = json.dumps(
                 {
                     "jsonrpc": "2.0",
@@ -196,7 +196,7 @@ class TestMultiInstanceGatewayE2E:
         try:
             assert s1.port != s2.port, "Servers must listen on different ports"
             for server in (s1, s2):
-                url = server.mcp_url()
+                url = server.mcp_url
                 body = json.dumps(
                     {
                         "jsonrpc": "2.0",
