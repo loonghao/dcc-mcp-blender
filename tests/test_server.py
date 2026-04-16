@@ -46,13 +46,13 @@ class TestBlenderMcpServerBasic:
         from dcc_mcp_blender.server import BlenderMcpServer
 
         server = BlenderMcpServer()
-        assert not server.is_running()
+        assert not server.is_running
 
     def test_mcp_url_none_when_not_running(self):
         from dcc_mcp_blender.server import BlenderMcpServer
 
         server = BlenderMcpServer()
-        assert server.mcp_url() is None
+        assert server.mcp_url is None
 
 
 class TestSkillPathCollection:
@@ -136,12 +136,12 @@ class TestServerLifecycle:
 
         server = BlenderMcpServer(port=0)
         server.start()
-        assert server.is_running()
-        url = server.mcp_url()
+        assert server.is_running
+        url = server.mcp_url
         assert url is not None
         assert "http://127.0.0.1:" in url
         server.stop()
-        assert not server.is_running()
+        assert not server.is_running
 
     def test_start_idempotent(self):
         from dcc_mcp_blender.server import BlenderMcpServer
@@ -177,7 +177,7 @@ class TestServerLifecycle:
         server = BlenderMcpServer(port=0)
         server.start()
         try:
-            url = server.mcp_url()
+            url = server.mcp_url
             assert str(server.port) in url
         finally:
             server.stop()
@@ -254,6 +254,189 @@ class TestProgressiveLoading:
         try:
             results = server.find_skills(dcc="blender")
             assert isinstance(results, list)
+        finally:
+            server.stop()
+
+    # ── behaviour tests (mocked McpHttpServer) ───────────────────────────────
+
+    def _make_server_with_mock(self, mock_inner):
+        """Return a running BlenderMcpServer whose inner _server is mock_inner."""
+        from dcc_mcp_blender.server import BlenderMcpServer
+
+        server = BlenderMcpServer(port=0)
+        server.start()
+        server._server = mock_inner  # replace with mock after start
+        return server
+
+    def test_list_skills_returns_content(self):
+        """list_skills() forwards to _server.list_skills() and returns its value."""
+        from unittest.mock import MagicMock
+
+        fake_skills = [
+            {"name": "blender-scene", "loaded": True, "dcc": "blender"},
+            {"name": "blender-mesh", "loaded": False, "dcc": "blender"},
+        ]
+        mock_inner = MagicMock()
+        mock_inner.list_skills.return_value = fake_skills
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            result = server.list_skills()
+            assert result == fake_skills
+            mock_inner.list_skills.assert_called_once_with(status=None)
+        finally:
+            server.stop()
+
+    def test_list_skills_with_status_filter(self):
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.list_skills.return_value = [{"name": "blender-scene", "loaded": True}]
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            server.list_skills(status="loaded")
+            mock_inner.list_skills.assert_called_once_with(status="loaded")
+        finally:
+            server.stop()
+
+    def test_find_skills_forwards_query_and_tags(self):
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.find_skills.return_value = [{"name": "blender-scene"}]
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            result = server.find_skills(query="scene", tags=["blender"], dcc="blender")
+            assert result == [{"name": "blender-scene"}]
+            mock_inner.find_skills.assert_called_once_with(query="scene", tags=["blender"], dcc="blender")
+        finally:
+            server.stop()
+
+    def test_find_skills_tags_none_becomes_empty_list(self):
+        """tags=None must be coerced to [] so the Rust binding doesn't crash."""
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.find_skills.return_value = []
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            server.find_skills(dcc="blender")  # tags not passed → None
+            _call_kwargs = mock_inner.find_skills.call_args
+            assert _call_kwargs.kwargs["tags"] == []
+        finally:
+            server.stop()
+
+    def test_load_skill_returns_actions_and_updates_state(self):
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.load_skill.return_value = ["blender_scene__get_session_info", "blender_scene__list_objects"]
+        mock_inner.is_loaded.return_value = True
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            actions = server.load_skill("blender-scene")
+            assert actions == ["blender_scene__get_session_info", "blender_scene__list_objects"]
+            mock_inner.load_skill.assert_called_once_with("blender-scene")
+            # is_skill_loaded now delegates to _server.is_loaded
+            assert server.is_skill_loaded("blender-scene") is True
+        finally:
+            server.stop()
+
+    def test_unload_skill_returns_count(self):
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.unload_skill.return_value = 5
+        mock_inner.is_loaded.return_value = False
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            removed = server.unload_skill("blender-scene")
+            assert removed == 5
+            mock_inner.unload_skill.assert_called_once_with("blender-scene")
+            assert server.is_skill_loaded("blender-scene") is False
+        finally:
+            server.stop()
+
+    def test_discover_skills_returns_count(self):
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.discover.return_value = 7
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            count = server.discover_skills()
+            assert count == 7
+        finally:
+            server.stop()
+
+    def test_discover_skills_extra_paths_prepended(self):
+        """Extra paths passed to discover_skills() appear before built-ins."""
+        import tempfile
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.discover.return_value = 2
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            with tempfile.TemporaryDirectory() as extra:
+                server.discover_skills(extra_paths=[extra])
+                called_paths = mock_inner.discover.call_args.kwargs["extra_paths"]
+                assert called_paths[0] == extra
+        finally:
+            server.stop()
+
+    def test_loaded_skill_count(self):
+        from unittest.mock import MagicMock
+
+        mock_inner = MagicMock()
+        mock_inner.loaded_count.return_value = 3
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            assert server.loaded_skill_count() == 3
+            mock_inner.loaded_count.assert_called_once()
+        finally:
+            server.stop()
+
+    def test_load_unload_round_trip(self):
+        """Full load → unload → reload cycle via mocks."""
+        from unittest.mock import MagicMock
+
+        loaded_state = {"blender-scene": False}
+
+        mock_inner = MagicMock()
+        mock_inner.load_skill.side_effect = lambda name: (
+            loaded_state.__setitem__(name, True) or ["action_a", "action_b"]
+        )
+        mock_inner.unload_skill.side_effect = lambda name: loaded_state.__setitem__(name, False) or 2
+        mock_inner.is_loaded.side_effect = lambda name: loaded_state.get(name, False)
+        mock_inner.loaded_count.side_effect = lambda: sum(loaded_state.values())
+
+        server = self._make_server_with_mock(mock_inner)
+        try:
+            # Load
+            actions = server.load_skill("blender-scene")
+            assert actions == ["action_a", "action_b"]
+            assert server.is_skill_loaded("blender-scene") is True
+            assert server.loaded_skill_count() == 1
+
+            # Unload
+            removed = server.unload_skill("blender-scene")
+            assert removed == 2
+            assert server.is_skill_loaded("blender-scene") is False
+            assert server.loaded_skill_count() == 0
+
+            # Reload
+            server.load_skill("blender-scene")
+            assert server.is_skill_loaded("blender-scene") is True
+            assert server.loaded_skill_count() == 1
         finally:
             server.stop()
 
