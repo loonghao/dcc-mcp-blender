@@ -320,7 +320,7 @@ jobs:
       - name: Setup Node.js for mcporter
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
 
       - name: Test MCP connectivity and progressive loading
         shell: bash
